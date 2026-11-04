@@ -1,0 +1,6 @@
+{
+  "name": "NamAA & Wellness | منصة نَماء وصِحّة",
+  "description": "منظومة رقمية تدمج العمل التطوعي البيئي الجغرافي (GIS) مع حسابات التغذية الرياضية واستشفاء المتطوعين وتتبع الأثر المزدوج.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
