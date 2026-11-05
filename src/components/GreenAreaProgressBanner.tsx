@@ -150,11 +150,11 @@ export const GreenAreaProgressBanner: React.FC<GreenAreaProgressBannerProps> = (
         </div>
 
         {/* The Animated Progress Bar */}
-        <div className="mt-5 space-y-2">
-          <div className="flex justify-between items-center text-xs text-emerald-100">
+        <div className="mt-4 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs text-emerald-100">
             <span className="flex items-center gap-1.5">
-              <Trees className="w-3.5 h-3.5 text-emerald-300" />
-              المساحة المكتسبة حالياً:{' '}
+              <Trees className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+              <span>المساحة المكتسبة حالياً:</span>{' '}
               <b className="font-mono text-white text-sm font-bold">
                 {currentGreenAreaSqm.toLocaleString()} م²
               </b>{' '}
@@ -164,8 +164,8 @@ export const GreenAreaProgressBanner: React.FC<GreenAreaProgressBannerProps> = (
             </span>
 
             <span className="flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-emerald-300" />
-              المستهدف المخطط له:{' '}
+              <Target className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+              <span>المستهدف المخطط له:</span>{' '}
               <b className="font-mono text-white text-sm font-bold">
                 {activeSector.targetAreaSqm.toLocaleString()} م²
               </b>{' '}
@@ -176,7 +176,7 @@ export const GreenAreaProgressBanner: React.FC<GreenAreaProgressBannerProps> = (
           </div>
 
           {/* Main Visual Progress Track */}
-          <div className="relative w-full h-4 bg-emerald-950/60 rounded-full overflow-hidden p-0.5 border border-emerald-700/50 shadow-inner">
+          <div className="relative w-full h-3.5 bg-emerald-950/60 rounded-full overflow-hidden p-0.5 border border-emerald-700/50 shadow-inner">
             <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-200 transition-all duration-700 ease-out shadow-sm relative overflow-hidden"
               style={{ width: `${progressPercent}%` }}
@@ -187,11 +187,11 @@ export const GreenAreaProgressBanner: React.FC<GreenAreaProgressBannerProps> = (
           </div>
 
           {/* Milestone Step Indicators */}
-          <div className="grid grid-cols-4 gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
             {milestones.map((m) => (
               <div
                 key={m.percent}
-                className={`text-[10px] sm:text-[11px] flex items-center gap-1 ${
+                className={`text-[10px] sm:text-[11px] flex items-center gap-1.5 p-1 rounded bg-emerald-950/40 border border-emerald-800/40 ${
                   m.achieved
                     ? 'text-emerald-200 font-semibold'
                     : 'text-emerald-400/60 font-normal'
@@ -202,7 +202,7 @@ export const GreenAreaProgressBanner: React.FC<GreenAreaProgressBannerProps> = (
                     m.achieved ? 'bg-emerald-300 shadow-xs' : 'bg-emerald-950 border border-emerald-700'
                   }`}
                 />
-                <span className="hidden sm:inline font-mono">{m.percent}%</span>
+                <span className="font-mono font-bold text-[10px]">{m.percent}%</span>
                 <span className="truncate">{m.label}</span>
               </div>
             ))}

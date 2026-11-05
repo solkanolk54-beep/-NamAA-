@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   INITIAL_CAMPAIGNS,
   INITIAL_LOGS,
@@ -18,26 +18,57 @@ import {
 import { calculateImpact } from './utils/calculator';
 import { OfflineWateringSyncManager } from './utils/treeTrackingOffline';
 import { Navbar, ActiveTab } from './components/Navbar';
+import { HomePage } from './components/pages/HomePage';
+import { MapPage } from './components/pages/MapPage';
+import { ImpactPage } from './components/pages/ImpactPage';
+import { RecoveryPage } from './components/pages/RecoveryPage';
+import { NextJsExportPage } from './components/pages/NextJsExportPage';
 import { VolunteerView } from './components/views/VolunteerView';
 import { OrganizerView } from './components/views/OrganizerView';
 import { SponsorView } from './components/views/SponsorView';
 import { ArchitectureDocView } from './components/views/ArchitectureDocView';
 import { AddVolunteerModal } from './components/AddVolunteerModal';
-import { GreenAreaProgressBanner } from './components/GreenAreaProgressBanner';
+import { AddCampaignModal } from './components/AddCampaignModal';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('volunteer');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('/');
   const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);
   const [volunteers, setVolunteers] = useState<User[]>(INITIAL_VOLUNTEERS);
   const [currentVolunteerId, setCurrentVolunteerId] = useState<string>(INITIAL_VOLUNTEERS[0].id);
   const [isAddVolunteerOpen, setIsAddVolunteerOpen] = useState(false);
+  const [isAddCampaignOpen, setIsAddCampaignOpen] = useState(false);
   const [trees, setTrees] = useState<TreeItem[]>(INITIAL_TREES);
   const [vouchers, setVouchers] = useState<NutritionalVoucher[]>(INITIAL_VOUCHERS);
   const [logs, setLogs] = useState<DualImpactLog[]>(INITIAL_LOGS);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(
     INITIAL_CAMPAIGNS[0].id
   );
+
+  // Synchronize browser history and path
+  const handleSelectTab = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', tab);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (['/', '/map', '/impact', '/recovery', '/organizer', '/nextjs-export'].includes(path)) {
+        setActiveTab(path as ActiveTab);
+      }
+      const handlePopState = () => {
+        const curPath = window.location.pathname;
+        if (['/', '/map', '/impact', '/recovery', '/organizer', '/nextjs-export'].includes(curPath)) {
+          setActiveTab(curPath as ActiveTab);
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, []);
 
   // Offline Simulation State
   const [isOffline, setIsOffline] = useState<boolean>(false);
@@ -61,6 +92,14 @@ export default function App() {
     setVolunteers((prev) => [newVolunteer, ...prev]);
     setCurrentVolunteerId(newVolunteer.id);
     setSyncToast(`تم تسجيل المتطوع الجديد "${newVolunteer.fullName}" بنجاح في منصة نماء وصحة بميلة! (+50 نقطة ترحيبية)`);
+    setTimeout(() => setSyncToast(null), 4500);
+  };
+
+  // Handler for adding a new campaign
+  const handleAddCampaign = (newCampaign: Campaign) => {
+    setCampaigns((prev) => [newCampaign, ...prev]);
+    setSelectedCampaignId(newCampaign.id);
+    setSyncToast(`تم نشر المبادرة البيئية "${newCampaign.title}" بنجاح!`);
     setTimeout(() => setSyncToast(null), 4500);
   };
 
@@ -356,10 +395,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Top Bar with Role Switcher & Connectivity */}
+      {/* Top Bar with Next.js App Router Navigation & Connectivity */}
       <Navbar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         isOffline={isOffline}
         onToggleOffline={() => setIsOffline(!isOffline)}
         offlineQueueCount={totalOfflineCount}
@@ -376,29 +415,54 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Targeted Green Area Growth Progress Bar */}
-        <GreenAreaProgressBanner trees={trees} />
-
-        {activeTab === 'volunteer' && (
-          <VolunteerView
-            currentVolunteer={currentVolunteer}
-            volunteers={volunteers}
+        {/* 1. Homepage / Landing Page ('/') */}
+        {activeTab === '/' && (
+          <HomePage
             campaigns={campaigns}
             trees={trees}
-            vouchers={vouchers}
+            onNavigate={handleSelectTab}
+            onOpenAddVolunteer={() => setIsAddVolunteerOpen(true)}
+            onOpenAddCampaign={() => setIsAddCampaignOpen(true)}
+          />
+        )}
+
+        {/* 2. Interactive Map & Dashboard ('/map') */}
+        {activeTab === '/map' && (
+          <MapPage
+            campaigns={campaigns}
+            trees={trees}
+            volunteers={volunteers}
+            currentVolunteer={currentVolunteer}
+            onWaterTree={handleWaterTree}
+            onOpenAddVolunteer={() => setIsAddVolunteerOpen(true)}
+            onOpenAddCampaign={() => setIsAddCampaignOpen(true)}
+          />
+        )}
+
+        {/* 3. Dual Impact & Tree Tracker ('/impact') */}
+        {activeTab === '/impact' && (
+          <ImpactPage
+            currentVolunteer={currentVolunteer}
+            campaigns={campaigns}
+            trees={trees}
             logs={logs}
             isOffline={isOffline}
             onLogActivity={handleLogActivity}
             onWaterTree={handleWaterTree}
             onUpdateTreeDetailed={handleUpdateTreeDetailed}
-            onSelectCampaign={setSelectedCampaignId}
-            selectedCampaignId={selectedCampaignId}
-            onSwitchVolunteer={setCurrentVolunteerId}
-            onOpenAddVolunteer={() => setIsAddVolunteerOpen(true)}
           />
         )}
 
-        {activeTab === 'organizer' && (
+        {/* 4. Voucher / Recovery Meal Scanner ('/recovery') */}
+        {activeTab === '/recovery' && (
+          <RecoveryPage
+            vouchers={vouchers}
+            onRedeemVoucher={handleRedeemVoucher}
+          />
+        )}
+
+        {/* 5. Organizer GIS Command Center ('/organizer') */}
+        {activeTab === '/organizer' && (
           <OrganizerView
             campaigns={campaigns}
             volunteers={volunteers}
@@ -410,14 +474,8 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sponsor' && (
-          <SponsorView
-            vouchers={vouchers}
-            onRedeemVoucher={handleRedeemVoucher}
-          />
-        )}
-
-        {activeTab === 'architecture' && <ArchitectureDocView />}
+        {/* 6. Production Ready Next.js & Vercel Code Export ('/nextjs-export') */}
+        {activeTab === '/nextjs-export' && <NextJsExportPage />}
       </main>
 
       {/* Add New Volunteer Modal */}
@@ -425,6 +483,13 @@ export default function App() {
         isOpen={isAddVolunteerOpen}
         onClose={() => setIsAddVolunteerOpen(false)}
         onAddVolunteer={handleAddVolunteer}
+      />
+
+      {/* Add New Eco Campaign Modal */}
+      <AddCampaignModal
+        isOpen={isAddCampaignOpen}
+        onClose={() => setIsAddCampaignOpen(false)}
+        onAddCampaign={handleAddCampaign}
       />
 
       {/* Footer */}
