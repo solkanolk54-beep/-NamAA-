@@ -16,7 +16,10 @@ import {
   Flame,
   Leaf,
   Layers,
-  Sparkles
+  Sparkles,
+  ShieldAlert,
+  Radio,
+  UserPlus,
 } from 'lucide-react';
 
 interface OrganizerViewProps {
@@ -26,6 +29,7 @@ interface OrganizerViewProps {
   selectedCampaignId: string;
   onSelectCampaign: (id: string) => void;
   onWaterTree: (treeId: string) => void;
+  onOpenAddVolunteer?: () => void;
 }
 
 export const OrganizerView: React.FC<OrganizerViewProps> = ({
@@ -35,6 +39,7 @@ export const OrganizerView: React.FC<OrganizerViewProps> = ({
   selectedCampaignId,
   onSelectCampaign,
   onWaterTree,
+  onOpenAddVolunteer,
 }) => {
   const currentCampaign =
     campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0];
@@ -108,20 +113,56 @@ export const OrganizerView: React.FC<OrganizerViewProps> = ({
           </p>
         </div>
 
-        {/* Campaign switcher dropdown */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <span className="text-xs text-slate-500 shrink-0">المبادرة النشطة:</span>
-          <select
-            value={currentCampaign.id}
-            onChange={(e) => onSelectCampaign(e.target.value)}
-            className="p-2 rounded-lg border border-slate-300 text-xs bg-slate-50 font-medium focus:bg-white focus:outline-none focus:border-emerald-500 text-slate-800"
-          >
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title} ({c.status})
-              </option>
-            ))}
-          </select>
+        {/* Campaign switcher & Add Volunteer Button */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {onOpenAddVolunteer && (
+            <button
+              onClick={onOpenAddVolunteer}
+              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all shrink-0 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>إضافة متطوع جديد</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 shrink-0">المبادرة:</span>
+            <select
+              value={currentCampaign.id}
+              onChange={(e) => onSelectCampaign(e.target.value)}
+              className="p-2 rounded-lg border border-slate-300 text-xs bg-slate-50 font-medium focus:bg-white focus:outline-none focus:border-emerald-500 text-slate-800"
+            >
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title} ({c.status})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Emergency Crisis Dispatch Alert Banner */}
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-rose-950">بلاغ طوارئ بيئي نشط: تطويق حريق محدود بالأحراش الجافة - غابة صناوة</span>
+              <span className="font-mono text-[10px] bg-rose-200 text-rose-900 px-1.5 py-0.2 rounded font-bold">عاجل (LEVEL 3)</span>
+            </div>
+            <p className="text-rose-800 text-[11px] mt-0.5">
+              تم تفعيل مسارات الـ PostGIS الآمنة وتصنيف المتطوعين لفئات فرز (إسعاف، حفر عازل، ونقل مياه).
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 font-mono text-[11px]">
+          <span className="text-slate-500">نطاق الأمان: 600م</span>
+          <span className="bg-white border border-rose-200 text-rose-900 font-bold px-2 py-1 rounded">
+            جاهزية الاستدعاء: 16/25
+          </span>
         </div>
       </div>
 
@@ -330,15 +371,26 @@ export const OrganizerView: React.FC<OrganizerViewProps> = ({
             <span className="text-xs font-bold text-slate-800">
               المتطوعون المؤهلون في النطاق ({matchedList.length}):
             </span>
-            {matchedList.length > 0 && (
-              <button
-                onClick={handleDispatchAll}
-                className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-2 py-1 rounded transition-colors flex items-center gap-1"
-              >
-                <Send className="w-3 h-3" />
-                استدعاء وتوجيه الجميع
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {onOpenAddVolunteer && (
+                <button
+                  onClick={onOpenAddVolunteer}
+                  className="text-[11px] font-medium text-emerald-800 hover:text-emerald-950 bg-emerald-100/70 hover:bg-emerald-100 px-2.5 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>إضافة متطوع</span>
+                </button>
+              )}
+              {matchedList.length > 0 && (
+                <button
+                  onClick={handleDispatchAll}
+                  className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Send className="w-3 h-3" />
+                  استدعاء وتوجيه الجميع
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Matched Volunteers List */}

@@ -13,19 +13,25 @@ import {
   TaskType,
   TreeItem,
   User,
+  TreeHealthStatus,
 } from './types';
 import { calculateImpact } from './utils/calculator';
+import { OfflineWateringSyncManager } from './utils/treeTrackingOffline';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { VolunteerView } from './components/views/VolunteerView';
 import { OrganizerView } from './components/views/OrganizerView';
 import { SponsorView } from './components/views/SponsorView';
 import { ArchitectureDocView } from './components/views/ArchitectureDocView';
+import { AddVolunteerModal } from './components/AddVolunteerModal';
+import { GreenAreaProgressBanner } from './components/GreenAreaProgressBanner';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('volunteer');
   const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);
   const [volunteers, setVolunteers] = useState<User[]>(INITIAL_VOLUNTEERS);
+  const [currentVolunteerId, setCurrentVolunteerId] = useState<string>(INITIAL_VOLUNTEERS[0].id);
+  const [isAddVolunteerOpen, setIsAddVolunteerOpen] = useState(false);
   const [trees, setTrees] = useState<TreeItem[]>(INITIAL_TREES);
   const [vouchers, setVouchers] = useState<NutritionalVoucher[]>(INITIAL_VOUCHERS);
   const [logs, setLogs] = useState<DualImpactLog[]>(INITIAL_LOGS);
@@ -46,8 +52,17 @@ export default function App() {
   >([]);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  // Active user (Yacine Belkacem for Volunteer view)
-  const currentVolunteer = volunteers[0];
+  // Active user (dynamic selection from volunteers)
+  const currentVolunteer =
+    volunteers.find((v) => v.id === currentVolunteerId) || volunteers[0];
+
+  // Handler for adding a new volunteer
+  const handleAddVolunteer = (newVolunteer: User) => {
+    setVolunteers((prev) => [newVolunteer, ...prev]);
+    setCurrentVolunteerId(newVolunteer.id);
+    setSyncToast(`تم تسجيل المتطوع الجديد "${newVolunteer.fullName}" بنجاح في منصة نماء وصحة بميلة! (+50 نقطة ترحيبية)`);
+    setTimeout(() => setSyncToast(null), 4500);
+  };
 
   // Handler for logging volunteer workouts and planting
   const handleLogActivity = (
@@ -207,6 +222,53 @@ export default function App() {
     setTimeout(() => setSyncToast(null), 3500);
   };
 
+  // Handler for detailed tree field inspection & watering via QR
+  const handleUpdateTreeDetailed = (
+    treeId: string,
+    updates: {
+      healthStatus: TreeHealthStatus;
+      waterVolumeLiters: number;
+      soilMoistureLevel: 'dry' | 'moderate' | 'optimal';
+      heightCm?: number;
+      canopyDiameterCm?: number;
+      growthStage?: 'sapling' | 'young' | 'maturing' | 'mature';
+      earnedPoints: number;
+    }
+  ) => {
+    setTrees((prev) =>
+      prev.map((t) =>
+        t.id === treeId
+          ? {
+              ...t,
+              healthStatus: updates.healthStatus,
+              lastWatered: 'اليوم (موثق بمسح الـ QR)',
+              nextWateringDue: 'بعد 4 أيام',
+              heightCm: updates.heightCm ?? t.heightCm,
+              canopyDiameterCm: updates.canopyDiameterCm ?? t.canopyDiameterCm,
+              growthStage: updates.growthStage ?? t.growthStage,
+              soilMoistureLevel: updates.soilMoistureLevel,
+              totalWateringCount: (t.totalWateringCount || 0) + 1,
+            }
+          : t
+      )
+    );
+
+    setVolunteers((prev) =>
+      prev.map((v) =>
+        v.id === currentVolunteer.id
+          ? { ...v, impactPoints: v.impactPoints + updates.earnedPoints }
+          : v
+      )
+    );
+
+    setSyncToast(
+      isOffline
+        ? 'تم حفظ سقاية وقياسات الشجرة محلياً دون اتصال! ستتم المزامنة عند عودة الشبكة.'
+        : `تم تحديث حالة الشجرة ومزامنتها فورياً عبر رمز QR (+${updates.earnedPoints} نقطة أثر)!`
+    );
+    setTimeout(() => setSyncToast(null), 4000);
+  };
+
   // Handler for Sponsor redeeming a meal voucher
   const handleRedeemVoucher = (voucherCode: string): boolean => {
     const voucher = vouchers.find(
@@ -240,21 +302,57 @@ export default function App() {
 
   // Process Offline Queue when online
   const handleSyncQueue = () => {
-    if (offlineQueue.length === 0) return;
+    let syncedCount = 0;
 
-    offlineQueue.forEach((item) => {
-      handleLogActivity(
-        item.taskType,
-        item.durationMinutes,
-        item.treesPlanted,
-        item.campaignId
-      );
-    });
+    // 1. Reconcile workouts queue
+    if (offlineQueue.length > 0) {
+      offlineQueue.forEach((item) => {
+        handleLogActivity(
+          item.taskType,
+          item.durationMinutes,
+          item.treesPlanted,
+          item.campaignId
+        );
+      });
+      syncedCount += offlineQueue.length;
+      setOfflineQueue([]);
+    }
 
-    setOfflineQueue([]);
-    setSyncToast('تمت مزامنة جميع السجلات المحلية المحفوظة دون اتصال بنجاح!');
+    // 2. Reconcile tree inspection & watering offline journal
+    const offlineTreeEvents = OfflineWateringSyncManager.getQueuedEvents();
+    if (offlineTreeEvents.length > 0) {
+      const reconciliation = OfflineWateringSyncManager.reconcileQueue();
+      if (reconciliation.reconciled.length > 0) {
+        setTrees((prev) =>
+          prev.map((tree) => {
+            const update = reconciliation.treeUpdatesMap[tree.tagCode];
+            if (update) {
+              return {
+                ...tree,
+                healthStatus: 'healthy',
+                lastWatered: 'اليوم (مزامنة دون اتصال)',
+                nextWateringDue: 'بعد 4 أيام',
+                soilMoistureLevel: update.latestMoisture,
+                totalWateringCount: (tree.totalWateringCount || 0) + 1,
+              };
+            }
+            return tree;
+          })
+        );
+        syncedCount += reconciliation.reconciled.length;
+      }
+    }
+
+    if (syncedCount > 0) {
+      setSyncToast(`تمت مزامنة ${syncedCount} سجلات ميدانية بنجاح مع الخادم المركزي!`);
+    } else {
+      setSyncToast('لا توجد سجلات محلية معلقة للمزامنة.');
+    }
     setTimeout(() => setSyncToast(null), 4000);
   };
+
+  // Total offline items in localStorage / queue
+  const totalOfflineCount = offlineQueue.length + OfflineWateringSyncManager.getQueuedEvents().length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -264,7 +362,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         isOffline={isOffline}
         onToggleOffline={() => setIsOffline(!isOffline)}
-        offlineQueueCount={offlineQueue.length}
+        offlineQueueCount={totalOfflineCount}
         onSyncQueue={handleSyncQueue}
       />
 
@@ -277,10 +375,14 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Targeted Green Area Growth Progress Bar */}
+        <GreenAreaProgressBanner trees={trees} />
+
         {activeTab === 'volunteer' && (
           <VolunteerView
             currentVolunteer={currentVolunteer}
+            volunteers={volunteers}
             campaigns={campaigns}
             trees={trees}
             vouchers={vouchers}
@@ -288,8 +390,11 @@ export default function App() {
             isOffline={isOffline}
             onLogActivity={handleLogActivity}
             onWaterTree={handleWaterTree}
+            onUpdateTreeDetailed={handleUpdateTreeDetailed}
             onSelectCampaign={setSelectedCampaignId}
             selectedCampaignId={selectedCampaignId}
+            onSwitchVolunteer={setCurrentVolunteerId}
+            onOpenAddVolunteer={() => setIsAddVolunteerOpen(true)}
           />
         )}
 
@@ -301,6 +406,7 @@ export default function App() {
             selectedCampaignId={selectedCampaignId}
             onSelectCampaign={setSelectedCampaignId}
             onWaterTree={handleWaterTree}
+            onOpenAddVolunteer={() => setIsAddVolunteerOpen(true)}
           />
         )}
 
@@ -313,6 +419,13 @@ export default function App() {
 
         {activeTab === 'architecture' && <ArchitectureDocView />}
       </main>
+
+      {/* Add New Volunteer Modal */}
+      <AddVolunteerModal
+        isOpen={isAddVolunteerOpen}
+        onClose={() => setIsAddVolunteerOpen(false)}
+        onAddVolunteer={handleAddVolunteer}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-4 px-6 text-xs text-slate-500">

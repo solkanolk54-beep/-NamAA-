@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { User, Campaign, TreeItem, NutritionalVoucher, TaskType, DualImpactLog } from '../../types';
+import { User, Campaign, TreeItem, NutritionalVoucher, TaskType, DualImpactLog, TerrainSlope, AmbientTemp, TreeHealthStatus } from '../../types';
 import { calculateImpact, MET_TABLE } from '../../utils/calculator';
 import { GisMap } from '../GisMap';
 import { DualImpactChartWidget } from '../DualImpactChartWidget';
+import { TreeQrScannerModal } from '../TreeQrScannerModal';
 import {
   Flame,
   Dumbbell,
@@ -21,10 +22,14 @@ import {
   Leaf,
   BarChart3,
   TrendingUp,
+  Camera,
+  Ruler,
+  UserPlus,
 } from 'lucide-react';
 
 interface VolunteerViewProps {
   currentVolunteer: User;
+  volunteers?: User[];
   campaigns: Campaign[];
   trees: TreeItem[];
   vouchers: NutritionalVoucher[];
@@ -37,12 +42,27 @@ interface VolunteerViewProps {
     campaignId: string
   ) => void;
   onWaterTree: (treeId: string) => void;
+  onUpdateTreeDetailed?: (
+    treeId: string,
+    updates: {
+      healthStatus: TreeHealthStatus;
+      waterVolumeLiters: number;
+      soilMoistureLevel: 'dry' | 'moderate' | 'optimal';
+      heightCm?: number;
+      canopyDiameterCm?: number;
+      growthStage?: 'sapling' | 'young' | 'maturing' | 'mature';
+      earnedPoints: number;
+    }
+  ) => void;
   onSelectCampaign: (id: string) => void;
   selectedCampaignId?: string;
+  onSwitchVolunteer?: (volunteerId: string) => void;
+  onOpenAddVolunteer?: () => void;
 }
 
 export const VolunteerView: React.FC<VolunteerViewProps> = ({
   currentVolunteer,
+  volunteers,
   campaigns,
   trees,
   vouchers,
@@ -50,25 +70,35 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
   isOffline,
   onLogActivity,
   onWaterTree,
+  onUpdateTreeDetailed,
   onSelectCampaign,
   selectedCampaignId,
+  onSwitchVolunteer,
+  onOpenAddVolunteer,
 }) => {
   // Activity logger state
   const [selectedTask, setSelectedTask] = useState<TaskType>('digging');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [treesPlanted, setTreesPlanted] = useState<number>(3);
+  const [terrainSlope, setTerrainSlope] = useState<TerrainSlope>('moderate_slope');
+  const [ambientTemp, setAmbientTemp] = useState<AmbientTemp>('moderate');
   const [selectedCampaignForLog, setSelectedCampaignForLog] = useState<string>(
     campaigns[0]?.id || ''
   );
   const [activeTab, setActiveTab] = useState<'tracker' | 'dashboard' | 'trees' | 'voucher' | 'map'>('tracker');
   const [showLogSuccess, setShowLogSuccess] = useState(false);
 
-  // Live calculation based on user weight and inputs
+  // Field Tree QR Modal State
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [selectedTreeForModal, setSelectedTreeForModal] = useState<TreeItem | null>(null);
+
+  // Live calculation based on user weight, inputs, and environmental factors
   const liveCalc = calculateImpact(
     selectedTask,
     durationMinutes,
     currentVolunteer.weightKg,
-    treesPlanted
+    treesPlanted,
+    { terrainSlope, ambientTemp }
   );
 
   // Volunteer's adopted trees
@@ -89,7 +119,7 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Volunteer Profile & Quick Impact Bar */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-lg shadow-sm border-2 border-emerald-100">
             {currentVolunteer.fullName.charAt(0)}
@@ -104,37 +134,70 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
             <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
               <span>الوزن: <b className="text-slate-700 font-mono">{currentVolunteer.weightKg} كغ</b></span>
               <span>·</span>
-              <span>المستوى البدني: <b className="text-slate-700">رياضي (Athlete)</b></span>
+              <span>المستوى البدني: <b className="text-slate-700">{currentVolunteer.fitnessLevel === 'athlete' ? 'رياضي (Athlete)' : currentVolunteer.fitnessLevel === 'moderate' ? 'متوسط (Moderate)' : 'مبتدئ (Beginner)'}</b></span>
               <span>·</span>
               <span>المهارات: <span className="text-slate-600">{currentVolunteer.skills.join('، ')}</span></span>
             </div>
           </div>
         </div>
 
-        {/* Impact Numbers */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-          <div className="text-center px-3 py-1.5 bg-amber-50/70 border border-amber-200/50 rounded-lg">
-            <span className="text-[10px] text-amber-700 block">السعرات المحروقة</span>
-            <span className="text-base font-bold text-amber-900 font-mono tabular-nums">
-              {currentVolunteer.totalCaloriesBurned}
-            </span>
-            <span className="text-[10px] text-amber-600 mr-1">kcal</span>
+        {/* Action Controls & Impact Numbers */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
+          {/* Volunteer Profile Switcher & Add Button */}
+          <div className="flex items-center gap-2">
+            {volunteers && volunteers.length > 1 && onSwitchVolunteer && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-lg text-xs">
+                <span className="text-slate-500 text-[11px] shrink-0">الحساب:</span>
+                <select
+                  value={currentVolunteer.id}
+                  onChange={(e) => onSwitchVolunteer(e.target.value)}
+                  className="bg-transparent font-medium text-slate-800 text-xs focus:outline-none cursor-pointer"
+                >
+                  {volunteers.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.fullName} ({v.impactPoints} pts)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {onOpenAddVolunteer && (
+              <button
+                onClick={onOpenAddVolunteer}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>إضافة متطوع جديد</span>
+              </button>
+            )}
           </div>
 
-          <div className="text-center px-3 py-1.5 bg-emerald-50/70 border border-emerald-200/50 rounded-lg">
-            <span className="text-[10px] text-emerald-700 block">الأشجار المتبناة</span>
-            <span className="text-base font-bold text-emerald-900 font-mono tabular-nums">
-              {currentVolunteer.totalTreesAdopted}
-            </span>
-            <span className="text-[10px] text-emerald-600 mr-1">شجرة</span>
-          </div>
+          {/* Quick Impact Metrics */}
+          <div className="flex items-center gap-2.5">
+            <div className="text-center px-2.5 py-1.5 bg-amber-50/70 border border-amber-200/50 rounded-lg">
+              <span className="text-[10px] text-amber-700 block">السعرات</span>
+              <span className="text-sm font-bold text-amber-900 font-mono tabular-nums">
+                {currentVolunteer.totalCaloriesBurned}
+              </span>
+              <span className="text-[9px] text-amber-600 mr-0.5">kcal</span>
+            </div>
 
-          <div className="text-center px-3 py-1.5 bg-blue-50/70 border border-blue-200/50 rounded-lg">
-            <span className="text-[10px] text-blue-700 block">نقاط الأثر (Impact)</span>
-            <span className="text-base font-bold text-blue-900 font-mono tabular-nums">
-              {currentVolunteer.impactPoints}
-            </span>
-            <span className="text-[10px] text-blue-600 mr-1">pts</span>
+            <div className="text-center px-2.5 py-1.5 bg-emerald-50/70 border border-emerald-200/50 rounded-lg">
+              <span className="text-[10px] text-emerald-700 block">الأشجار</span>
+              <span className="text-sm font-bold text-emerald-900 font-mono tabular-nums">
+                {currentVolunteer.totalTreesAdopted}
+              </span>
+              <span className="text-[9px] text-emerald-600 mr-0.5">شجرة</span>
+            </div>
+
+            <div className="text-center px-2.5 py-1.5 bg-blue-50/70 border border-blue-200/50 rounded-lg">
+              <span className="text-[10px] text-blue-700 block">النقاط</span>
+              <span className="text-sm font-bold text-blue-900 font-mono tabular-nums">
+                {currentVolunteer.impactPoints}
+              </span>
+              <span className="text-[9px] text-blue-600 mr-0.5">pts</span>
+            </div>
           </div>
         </div>
       </div>
@@ -275,6 +338,38 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
                 </div>
               </div>
 
+              {/* Dynamic Environmental Factors: Slope & Temperature */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    انحدار التضاريس (Slope):
+                  </label>
+                  <select
+                    value={terrainSlope}
+                    onChange={(e) => setTerrainSlope(e.target.value as TerrainSlope)}
+                    className="w-full p-1.5 rounded border border-slate-200 text-[11px] bg-white font-medium"
+                  >
+                    <option value="flat">أرض منبسطة (1.0x)</option>
+                    <option value="moderate_slope">منحدر متوسط (+12%)</option>
+                    <option value="steep_mountain">مرتفعات جبلية حادة (+25%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    الطقس والإجهاد الحراري:
+                  </label>
+                  <select
+                    value={ambientTemp}
+                    onChange={(e) => setAmbientTemp(e.target.value as AmbientTemp)}
+                    className="w-full p-1.5 rounded border border-slate-200 text-[11px] bg-white font-medium"
+                  >
+                    <option value="cool">خريفي معتدل (1.0x)</option>
+                    <option value="moderate">معتدل 22°C (1.0x)</option>
+                    <option value="hot_summer">صيف حار أعلى من 30°C (+10%)</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Duration Slider */}
               <div className="bg-slate-50/70 p-3.5 rounded-lg border border-slate-200/70">
                 <div className="flex items-center justify-between mb-2">
@@ -345,7 +440,7 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
               <div className="flex items-center justify-between border-b border-slate-700 pb-3 mb-3">
                 <span className="text-xs text-amber-400 font-semibold flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5" />
-                  تقدير الأثر الصحي المباشر (MET {liveCalc.metValue})
+                  MET المعدل تضاريسياً: {liveCalc.adjustedMetValue} (الأساسي: {liveCalc.metValue})
                 </span>
                 <span className="text-[10px] text-slate-400">وزن {currentVolunteer.weightKg} كغ</span>
               </div>
@@ -367,12 +462,12 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
                     <span className="text-2xl font-bold font-mono text-emerald-400">
                       {liveCalc.proteinGrams}
                     </span>
-                    <span className="text-xs text-slate-400">g بروتين</span>
+                    <span className="text-xs text-slate-400">g (ليوسين: {liveCalc.advancedRecovery.leucineGrams}g)</span>
                   </div>
                 </div>
               </div>
 
-              {/* Nutrition breakdown */}
+              {/* Nutrition & Electrolytes breakdown */}
               <div className="space-y-2 text-xs border-t border-slate-700/80 pt-3">
                 <div className="flex justify-between items-center text-slate-300">
                   <span>تعويض الجليكوجين (كربوهيدرات):</span>
@@ -381,6 +476,10 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
                 <div className="flex justify-between items-center text-slate-300">
                   <span>تعويض السوائل والترطيب:</span>
                   <span className="font-mono font-bold text-blue-300">{liveCalc.hydrationMl} مل ماء</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>الشوارد الكهرلية (صوديوم / بوتاسيوم):</span>
+                  <span className="font-mono font-bold text-amber-300">{liveCalc.advancedRecovery.sodiumMg}mg / {liveCalc.advancedRecovery.potassiumMg}mg</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-300">
                   <span>نقاط الأثر المكتسبة:</span>
@@ -445,15 +544,27 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
       {/* TAB 2: My Planted Trees Registry */}
       {activeTab === 'trees' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-sm text-slate-900">سجل أشجاري المتبناة ومواعيد الري</h3>
+              <h3 className="font-bold text-sm text-slate-900">سجل أشجاري المتبناة ووسوم الـ QR الميدانية</h3>
               <p className="text-xs text-slate-500">
-                متابعة دورية لكل شجرة تم غرسها مع تنبيهات السقاية الذكية لضمان نسبة نجاح 95%
+                متابعة دورية لكل شجرة مع مسح رمز الاستجابة السريعة (QR) لتحديث السقاية والنمو فورياً
               </p>
             </div>
-            <div className="text-xs font-mono bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg border border-emerald-200">
-              إجمالي الأشجار: {myTrees.length}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedTreeForModal(myTrees[0] || trees[0]);
+                  setQrModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+              >
+                <Camera className="w-3.5 h-3.5 text-emerald-200" />
+                <span>مسح وسم QR الميداني وتحديث السقاية والنمو</span>
+              </button>
+              <div className="text-xs font-mono bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-200 shrink-0">
+                إجمالي الأشجار: {myTrees.length}
+              </div>
             </div>
           </div>
 
@@ -503,6 +614,12 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span>الارتفاع وقطر التاج:</span>
+                      <span className="font-mono text-slate-800 font-bold">
+                        {tree.heightCm || 85} سم · {tree.canopyDiameterCm || 45} سم
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span>امتصاص CO2 سنوياً:</span>
                       <span className="font-mono text-emerald-700 font-bold">
                         {tree.estimatedAnnualCo2Kg} كغ/سنة
@@ -510,13 +627,26 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => onWaterTree(tree.id)}
-                    className="w-full py-1.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Droplet className="w-3.5 h-3.5 text-blue-600" />
-                    <span>توثيق ري الشجرة (+10 نقاط أثر)</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedTreeForModal(tree);
+                        setQrModalOpen(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>مسح الـ QR والنمو</span>
+                    </button>
+                    <button
+                      onClick={() => onWaterTree(tree.id)}
+                      className="py-1.5 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                      title="سقاية سريعة"
+                    >
+                      <Droplet className="w-3.5 h-3.5 text-blue-600" />
+                      <span>+10</span>
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -653,6 +783,23 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
           />
         </div>
       )}
+
+      {/* Field Tree QR Scanner & Growth Inspection Modal */}
+      <TreeQrScannerModal
+        trees={trees}
+        volunteer={currentVolunteer}
+        isOffline={isOffline}
+        isOpen={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        initialSelectedTree={selectedTreeForModal}
+        onUpdateTree={(treeId, updates) => {
+          if (onUpdateTreeDetailed) {
+            onUpdateTreeDetailed(treeId, updates);
+          } else {
+            onWaterTree(treeId);
+          }
+        }}
+      />
     </div>
   );
 };

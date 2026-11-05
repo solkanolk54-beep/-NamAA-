@@ -39,6 +39,11 @@ export interface TreeItem {
   nextWateringDue: string;
   estimatedAnnualCo2Kg: number;
   photoUrl?: string;
+  heightCm?: number;
+  canopyDiameterCm?: number;
+  growthStage?: 'sapling' | 'young' | 'maturing' | 'mature';
+  soilMoistureLevel?: 'dry' | 'moderate' | 'optimal';
+  totalWateringCount?: number;
 }
 
 export type TaskType = 'digging' | 'tree_planting' | 'carrying_water' | 'site_clearing';
@@ -106,3 +111,117 @@ export interface SpatialVolunteerMatch {
   matchingSkills: string[];
   isEligible: boolean;
 }
+
+// 1. Dynamic MET & Advanced Nutrition Types
+export type TerrainSlope = 'flat' | 'moderate_slope' | 'steep_mountain';
+export type AmbientTemp = 'cool' | 'moderate' | 'hot_summer';
+
+export interface DynamicMETOptions {
+  terrainSlope?: TerrainSlope;
+  ambientTemp?: AmbientTemp;
+  cardiacDriftMultiplier?: number;
+}
+
+export interface AdvancedRecoveryNutrients {
+  targetProteinGrams: number;
+  leucineGrams: number;
+  targetCarbsGrams: number;
+  glycogenWindowMinutes: number;
+  hydrationMl: number;
+  sodiumMg: number;
+  potassiumMg: number;
+  magnesiumMg: number;
+  recommendedRecipe: string;
+}
+
+// 2. Smart Tree Tracking & QR Schema
+export interface TreeQRPayload {
+  v: number; // schema version (1)
+  tid: string; // tag code (e.g. MLA-OLV-001)
+  treeId: string;
+  speciesCode: 'OLV' | 'CRB' | 'PIN' | 'SDR';
+  plantedTimestamp: number;
+  coords: [number, number]; // [lat, lng]
+  cryptoSignature: string; // HMAC-SHA256 signature
+}
+
+export interface OfflineWateringEvent {
+  id: string; // UUID v4 / v5
+  idempotencyKey: string;
+  treeTagCode: string;
+  volunteerId: string;
+  volunteerName: string;
+  waterVolumeLiters: number;
+  soilMoistureLevel: 'dry' | 'moderate' | 'optimal';
+  recordedAtTimestamp: number;
+  vectorClock: number;
+  syncStatus: 'queued' | 'reconciled' | 'conflict_resolved';
+}
+
+export interface TreeGrowthMilestone {
+  id: string;
+  treeTagCode: string;
+  recordedDate: string;
+  heightCm: number;
+  canopyDiameterCm: number;
+  stemDiameterMm: number;
+  calculatedBiomassKg: number;
+  healthIndex: number; // 0 - 100
+}
+
+// 3. Geo-AI Vegetation & Carbon Metrics
+export interface GeoAiPlotMetrics {
+  plotId: string;
+  plotName: string;
+  centerCoords: [number, number];
+  areaHectares: number;
+  ndviCurrent: number; // Normalized Difference Vegetation Index (-1 to +1)
+  ndviBaseline: number;
+  saviIndex: number; // Soil Adjusted Vegetation Index
+  canopyCoveragePercent: number; // e.g. 34.5%
+  treeDensityPerHectare: number;
+  speciesDistribution: Record<string, number>;
+  totalBiomassTons: number;
+  annualCo2AbsorptionTons: number;
+  historicalYears: number[];
+  ndviTrend: number[];
+  canopyTrendPercent: number[];
+}
+
+// 4. Emergency Dispatch Module
+export type CrisisType = 'wildfire' | 'flash_flood' | 'severe_drought' | 'soil_erosion_collapse';
+export type CrisisSeverity = 'level_1_advisory' | 'level_2_urgent' | 'level_3_critical' | 'level_4_emergency';
+
+export interface CrisisEvent {
+  id: string;
+  title: string;
+  crisisType: CrisisType;
+  severity: CrisisSeverity;
+  affectedZoneName: string;
+  epicenter: [number, number];
+  evacuationRadiusMeters: number;
+  bufferPolygonCoords: [number, number][];
+  requiredVolunteerRoles: string[];
+  minimumVolunteersNeeded: number;
+  confirmedDispatchedCount: number;
+  safeAssemblyPoint: {
+    name: string;
+    coords: [number, number];
+  };
+  reportedAt: string;
+  status: 'active' | 'contained' | 'resolved';
+}
+
+export interface EmergencyDispatchRoute {
+  crisisId: string;
+  volunteerId: string;
+  originCoords: [number, number];
+  destinationCoords: [number, number];
+  safeWaypoints: [number, number][];
+  hazardBufferMeters: number;
+  estimatedTransitMinutes: number;
+  distanceKm: number;
+  routeSafetyScore: number; // 0 - 100
+  offlineCompressedSmsPacket: string; // 160-char SMS fallback string
+}
+
