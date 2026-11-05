@@ -284,6 +284,7 @@ export default function App() {
             campaigns={campaigns}
             trees={trees}
             vouchers={vouchers}
+            logs={logs}
             isOffline={isOffline}
             onLogActivity={handleLogActivity}
             onWaterTree={handleWaterTree}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { User, Campaign, TreeItem, NutritionalVoucher, TaskType } from '../../types';
+import { User, Campaign, TreeItem, NutritionalVoucher, TaskType, DualImpactLog } from '../../types';
 import { calculateImpact, MET_TABLE } from '../../utils/calculator';
 import { GisMap } from '../GisMap';
+import { DualImpactChartWidget } from '../DualImpactChartWidget';
 import {
   Flame,
   Dumbbell,
@@ -17,7 +18,9 @@ import {
   Calendar,
   AlertTriangle,
   Send,
-  Leaf
+  Leaf,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 
 interface VolunteerViewProps {
@@ -25,6 +28,7 @@ interface VolunteerViewProps {
   campaigns: Campaign[];
   trees: TreeItem[];
   vouchers: NutritionalVoucher[];
+  logs?: DualImpactLog[];
   isOffline: boolean;
   onLogActivity: (
     taskType: TaskType,
@@ -42,6 +46,7 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
   campaigns,
   trees,
   vouchers,
+  logs = [],
   isOffline,
   onLogActivity,
   onWaterTree,
@@ -55,7 +60,7 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
   const [selectedCampaignForLog, setSelectedCampaignForLog] = useState<string>(
     campaigns[0]?.id || ''
   );
-  const [activeTab, setActiveTab] = useState<'tracker' | 'trees' | 'voucher' | 'map'>('tracker');
+  const [activeTab, setActiveTab] = useState<'tracker' | 'dashboard' | 'trees' | 'voucher' | 'map'>('tracker');
   const [showLogSuccess, setShowLogSuccess] = useState(false);
 
   // Live calculation based on user weight and inputs
@@ -146,6 +151,17 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
         >
           <Activity className="w-3.5 h-3.5" />
           حاسبة الجهد والتغذية الرياضية
+        </button>
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'dashboard'
+              ? 'bg-emerald-700 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          لوحة قيادة الأثر المزدوج (Recharts)
         </button>
         <button
           onClick={() => setActiveTab('trees')}
@@ -403,6 +419,26 @@ export const VolunteerView: React.FC<VolunteerViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Recharts Dual Impact Dashboard Widget embedded in Tracker */}
+          <div className="pt-2">
+            <DualImpactChartWidget
+              volunteer={currentVolunteer}
+              logs={logs}
+              trees={trees}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Dedicated Recharts Dual Impact Dashboard */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-4">
+          <DualImpactChartWidget
+            volunteer={currentVolunteer}
+            logs={logs}
+            trees={trees}
+          />
         </div>
       )}
 
